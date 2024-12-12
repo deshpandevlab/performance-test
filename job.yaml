@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ddos-simulator
+spec:
+  parallelism: 100  # Number of pods to run simultaneously
+  completions: 10  # Total number of pods to run
+  template:
+    metadata:
+      name: ddos-pod
+    spec:
+      containers:
+      - name: ddos-container
+        image: quay.io/sclorg/s2i-base-c9s:latest
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            if ! command -v jq &> /dev/null; then
+              echo "jq not found. Installing..."
+              microdnf install -y jq
+            fi
+            for i in {1..5000}; do
+              curl -k https://kub-ue1.quaydev.org/v2/performance/test/tags/list &
+              if (( i % 100 == 0 )); then
+                sleep 0.1
+              fi
+            done
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 3000
+      restartPolicy: Never

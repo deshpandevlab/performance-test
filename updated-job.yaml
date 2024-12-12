@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ddos-simulator
+spec:
+  parallelism: 1000  # Number of pods to run simultaneously
+  completions: 100  # Total number of pods to run
+  template:
+    metadata:
+      name: ddos-pod
+    spec:
+      containers:
+      - name: ddos-container
+        image: quay.io/sclorg/s2i-base-c9s:latest
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            # Function to generate random string
+            random_string() {
+              cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${1:-32} | head -n 1
+            }
+
+            if ! command -v jq &> /dev/null; then
+              echo "jq not found. Installing..."
+              microdnf install -y jq
+            fi
+            # Run curl requests with randomization
+            for i in {1..50000}; do
+              random_param=$(random_string 8)
+              curl -k -X GET "https://kub-ue1.quaydev.org/v2/performance/test/manifests/latest?param=${random_param}" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" &
+              if (( i % 1000 == 0 )); then
+                sleep 0.01
+              fi
+            done
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 3000
+      restartPolicy: Never
